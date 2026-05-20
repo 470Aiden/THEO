@@ -8,18 +8,51 @@ import requests
 import json
 import httpx
 from openai import OpenAI
+from faster_whisper import WhisperModel
+from kokoro_onnx import Kokoro
+from elevenlabs.client import ElevenLabs
+import elevenlabs.play
+import soundfile as sf
 
 
 
 load_dotenv("key.env")#uses python-dotenv library to read the .env file for the api key
 api_key = os.environ.get("GROQ_API_KEY")  #assigns the api key to a variable
 client = Groq(api_key=api_key)
+el_client = ElevenLabs(api_key=os.environ.get("ELEVEN_LABS_KEY"))
 
+kokoro = Kokoro("kokoro-v1.0.int8.onnx", "voices-v1.0.bin") #sets up kokoro 
+#tries accessing the groq api link. Will not work without internet access.
+try:
+    httpx.get("https://api.groq.com", timeout=2)
+    ONLINE = True
+except:
+    ONLINE = False
+
+
+def speak(reply):
+    if ONLINE == True:
+        audio = el_client.text_to_speech.convert(
+            text = reply,
+            voice_id="JBFqnCBsd6RMkjVDRZzb",
+            model_id="eleven_flash_v2_5",
+            output_format="mp3_44100_128"
+        )
+        elevenlabs.play.play(audio)
+    else:
+        samples, sample_rate = kokoro.create(
+            reply,
+            voice="af_heart",
+            speed=1.0,
+            lang="en-us"
+        )
+        sd.play(samples,sample_rate)
+        sd.wait()
+
+local_whisper = WhisperModel("base", device="cpu", compute_type="int8")
 #Checks internet access to determine whether to use cloud whisper model or local whisper model.
-
 def transcribe(filename):
-    try:
-        httpx.get("https://api.groq.com", timeout=2)
+    if ONLINE == True:
         # Online — use Groq Whisper
         print("[Online - using Groq Whisper]")
         with open(filename, "rb") as file:
@@ -29,22 +62,16 @@ def transcribe(filename):
                 language="en"
             )
         return transcription.text
-    except:
+    else:
         # Offline — use local Whisper
         print("[Offline - using local Whisper]")
-        import whisper
-        model = whisper.load_model("base")
-        result = model.transcribe(filename, fp16=False)
-        return result["text"]
+        segments, _ = local_whisper.transcribe(filename, language="en")
+        return " ".join([s.text for s in segments])
 #Checks internet access to determine whether to use cloud groq model or local ollama model.
 def get_client():
-    try:
-        #tries accessing the groq api link. Will not work without internet access.
-        httpx.get("https://api.groq.com",timeout=2)
-        print("Online - Using Groq")
+    if ONLINE == True:
         return client, "llama-3.1-8b-instant"
-        
-    except:
+    else:
         print("Offline - Using Ollama")
         local_client = OpenAI(
             base_url="http://localhost:11434/v1",
@@ -163,5 +190,6 @@ while True:
         reply = response.choices[0].message.content
     messages.append({"role":"assistant","content":reply})
     print(f"Jarvis: {reply}\n")
+    speak(reply)
 
 
