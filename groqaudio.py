@@ -16,7 +16,8 @@ import soundfile as sf
 import numpy as np
 from openwakeword.model import Model
 import pyaudio
-
+import spotipy
+from spotipy.oauth2 import SpotifyOAuth
 
 
 
@@ -90,7 +91,7 @@ def transcribe(filename):
 #Checks internet access to determine whether to use cloud groq model or local ollama model.
 def get_client():
     if ONLINE == True:
-        return client, "llama-3.1-8b-instant"
+        return client, "llama-3.3-70b-versatile"
     else:
         print("Offline - Using Ollama")
         local_client = OpenAI(
@@ -98,6 +99,8 @@ def get_client():
             api_key="ollama"
         )
         return local_client,"llama3.2:3b"
+
+
 
 
 def get_time():
@@ -115,6 +118,49 @@ def get_weather(city):
         return f"The current temperature {temp}°C, {description} in {city}"
     except:
         return "Cannot reach weather data, there is no internet available"
+
+sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
+    client_id=os.environ.get("SPOTIFY_CLIENT_ID"),
+    client_secret=os.environ.get("SPOTIFY_CLIENT_SECRET"),
+    redirect_uri="http://127.0.0.1:8000/callback",
+    scope="user-modify-playback-state user-read-playback-state user-read-recently-played"
+))
+def play_spotify(query):
+    try:
+        results = sp.search(q=query, type="track",limit=1)
+        track_uri= results["tracks"]["items"][0]["uri"]
+        sp.start_playback(uris=[track_uri])
+        track_name= results["tracks"]["items"][0]["name"]
+        artist = results["tracks"]["items"][0]["artists"][0]["name"]
+        return f"Playing {track_name} by {artist}"
+    except Exception as e:
+        print(f"Spotify error is {e}")
+        return "Couldn't play that. Ensure spotify is open on your device."
+
+def pause_spotify():
+    try:
+        playback= sp.current_playback()
+        if playback and playback["is_playing"]:
+            sp.pause_playback()
+            return "Track paused"
+        else:
+            sp.start_playback()
+            return "Track resumed"
+    except:
+        return "Nothing is playing"
+
+def next_track():
+    try:
+        sp.next_track()
+        return "Track skipped"
+    except:
+        return "End of playlist"
+def previous_track():
+    try:
+        sp.previous_track()
+        return "Now playing the previous track"
+    except:
+        return "No previous tracks"
 
 #Describes the tool for the ai, saying "Here is a tool you can use"
 tools=[
@@ -146,22 +192,64 @@ tools=[
                 "required":["city"] #tells the AI it Has to have this info
             }
         }
+    },
+        {
+        "type":"function",
+        "function": {
+            "name":"play_spotify",
+            "description":"Plays a spotify track based on the song and artist name given by the user. Use this whenever the user asks to play a song, and always listen for song and artist names.",
+            "parameters":{
+                "type":"object",
+                "properties":{
+                    "query":{
+                        "type":"string",
+                        "description":"The name of the song the user wants to play and the artist it is by."
+                    }
+                },
+                "required":["query"] #tells the AI it Has to have this info
+            }
+        }
+    },
+    {
+        "type":"function",
+        "function": {
+            "name":"pause_spotify",
+            "description":"Pauses/unpauses the spotify track which is currently playing.",
+            "parameters":{
+                "type":"object",
+                "properties":{}
+            }
+        }
+    },
+     {
+        "type":"function",
+        "function": {
+            "name":"next_track",
+            "description":"Plays the next track in the spotify track queue",
+            "parameters":{
+                "type":"object",
+                "properties":{}
+            }
+        }
     }
+    
 ]
 active_client, model = get_client()
 messages=[{"role": "system", #tells the system its role
         "content": """You are a friendly home assistant named Jarvis who specializes in 
-        tech support for older users with little technological experience.
-        Always keep responses short and simple — 2 sentences maximum.
-        Avoid technical jargon. If giving instructions, use one step at a time.
-        Good response example: 'Your printer may be out of paper. Try opening the paper tray and refilling it.'
-        Bad response example: 'There are several potential causes for this issue. First, let's diagnose whether it's a connectivity problem, a driver issue, or a hardware malfunction...'"""
+tech support for older users with little technological experience.
+You have tools available to control Spotify, check weather, and get the time.
+IMPORTANT: When you need to use a tool, use it directly — never write out function calls as text.
+Always keep responses short and simple — 2 sentences maximum.
+Avoid technical jargon. If giving instructions, use one step at a time.
+Good response example: 'Your printer may be out of paper. Try opening the paper tray and refilling it.'
+Bad response example: 'There are several potential causes for this issue. First, let's diagnose whether it's a connectivity problem, a driver issue, or a hardware malfunction...'"""
     }]
+
+listen_for_wake()
+speak("Yes?")
 while True:
     filename = os.path.dirname(__file__) +"/userspeech.wav"
-
-    listen_for_wake()
-    speak("Yes?")
     # Step 1 — Record first, THEN transcribe
     print("Recording for 5 seconds... speak now")
     audio = sd.rec(int(5 * 16000), samplerate=16000, channels=1, dtype="int16")
@@ -180,6 +268,7 @@ while True:
 
     response = active_client.chat.completions.create(
         tools=tools, #Gives the ai the available tools 
+        tool_choice="auto",
         messages=messages,   
         model = model)
     #Did the ai want to call the tool?
@@ -193,6 +282,17 @@ while True:
             args = json.loads(tool_call.function.arguments)
             result = get_weather(args["city"])
             print(f"Tool ran: Weather report is, {result}")
+        elif tool_call.function.name == "play_spotify":
+            args = json.loads(tool_call.function.arguments)
+            result = play_spotify(args["query"])
+        elif tool_call.function.name == "pause_spotify":
+            result = pause_spotify()
+        elif tool_call.function.name == "next_track":
+            result = next_track()
+        elif tool_call.function.name == "previous_track":
+            result = previous_track()
+        
+
         #add the message to the AIs memory 
         messages.append(response.choices[0].message)
         messages.append({
@@ -203,7 +303,8 @@ while True:
 
         final = active_client.chat.completions.create(
             messages=messages,
-            model= model
+            model= model,
+            tool_choice="none"  # don't call tools again on the final response
         )
         reply = final.choices[0].message.content
     else:
