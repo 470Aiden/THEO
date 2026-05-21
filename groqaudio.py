@@ -13,6 +13,10 @@ from kokoro_onnx import Kokoro
 from elevenlabs.client import ElevenLabs
 import elevenlabs.play
 import soundfile as sf
+import numpy as np
+from openwakeword.model import Model
+import pyaudio
+
 
 
 
@@ -29,7 +33,23 @@ try:
 except:
     ONLINE = False
 
-
+wakeword_model=Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
+def listen_for_wake():
+    pa = pyaudio.PyAudio()
+    stream = pa.open(
+        rate=16000,channels=1,
+        format=pyaudio.paInt16,
+        input=True,frames_per_buffer=1280
+    )
+    print("Listening for wake word")
+    while True:
+        audio_chunk = np.frombuffer(stream.read(1280), dtype=np.int16)
+        prediction = wakeword_model.predict(audio_chunk)
+        if prediction["hey_jarvis"] > 0.5:
+            stream.stop_stream()
+            stream.close()
+            pa.terminate()
+            return    # Wake word heard, exit and start recording
 def speak(reply):
     if ONLINE == True:
         audio = el_client.text_to_speech.convert(
@@ -138,10 +158,10 @@ messages=[{"role": "system", #tells the system its role
         Bad response example: 'There are several potential causes for this issue. First, let's diagnose whether it's a connectivity problem, a driver issue, or a hardware malfunction...'"""
     }]
 while True:
-
-    
-
     filename = os.path.dirname(__file__) +"/userspeech.wav"
+
+    listen_for_wake()
+    speak("Yes?")
     # Step 1 — Record first, THEN transcribe
     print("Recording for 5 seconds... speak now")
     audio = sd.rec(int(5 * 16000), samplerate=16000, channels=1, dtype="int16")
