@@ -18,6 +18,8 @@ from openwakeword.model import Model
 import pyaudio
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
+import cv2
+import base64
 
 
 
@@ -51,24 +53,6 @@ def listen_for_wake():
             stream.close()
             pa.terminate()
             return    # Wake word heard, exit and start recording
-def speak(reply):
-    if ONLINE == True:
-        audio = el_client.text_to_speech.convert(
-            text = reply,
-            voice_id="JBFqnCBsd6RMkjVDRZzb",
-            model_id="eleven_flash_v2_5",
-            output_format="mp3_44100_128"
-        )
-        elevenlabs.play.play(audio)
-    else:
-        samples, sample_rate = kokoro.create(
-            reply,
-            voice="af_heart",
-            speed=1.0,
-            lang="en-us"
-        )
-        sd.play(samples,sample_rate)
-        sd.wait()
 
 local_whisper = WhisperModel("base", device="cpu", compute_type="int8")
 #Checks internet access to determine whether to use cloud whisper model or local whisper model.
@@ -88,6 +72,26 @@ def transcribe(filename):
         print("[Offline - using local Whisper]")
         segments, _ = local_whisper.transcribe(filename, language="en")
         return " ".join([s.text for s in segments])
+    
+def speak(reply):
+    if ONLINE == True:
+        audio = el_client.text_to_speech.convert(
+            text = reply,
+            voice_id="JBFqnCBsd6RMkjVDRZzb",
+            model_id="eleven_flash_v2_5",
+            output_format="mp3_44100_128"
+        )
+        elevenlabs.play.play(audio)
+    else:
+        samples, sample_rate = kokoro.create(
+            reply,
+            voice="af_heart",
+            speed=1.0,
+            lang="en-us"
+        )
+        sd.play(samples,sample_rate)
+        sd.wait()
+
 #Checks internet access to determine whether to use cloud groq model or local ollama model.
 def get_client():
     if ONLINE == True:
@@ -116,7 +120,8 @@ def get_weather(city):
         temp= data["main"]["temp"]
         description = data["weather"][0]["description"]
         return f"The current temperature {temp}°C, {description} in {city}"
-    except:
+    except Exception as e:
+        print(f"The error is{e}")
         return "Cannot reach weather data, there is no internet available"
 
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
@@ -162,6 +167,65 @@ def previous_track():
     except:
         return "No previous tracks"
 
+def wait_for_screen():
+    cam = cv2.VideoCapture(0)
+    speak("Please hold your screen up to the camera.")
+    
+    while True:
+        ret, frame = cam.read()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        best_area = 0
+        for contour in contours:
+            approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
+            area = cv2.contourArea(contour)
+            if len(approx) == 4 and area > best_area:
+                best_area = area
+        print(f"Area:{best_area}")
+        if best_area > 80000:
+            # Screen is large and clear enough
+            cam.release()
+            _, buffer = cv2.imencode(".jpg", frame)
+            return base64.b64encode(buffer).decode("utf-8")
+        
+        elif best_area > 30000:
+            # Screen partially visible — warn the user
+            speak("I can see a screen but it's not fully in view. Please move it closer.")
+            import time
+            time.sleep(3)  # wait before checking again so it doesn't spam
+        
+        # Below 30000 — nothing detected, keep waiting silently
+
+    cam.release()
+
+def analyze_screen(image_data):
+    response = client.chat.completions.create(
+        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_data}"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": "This is a screen shown by an older user having a tech issue. What error or problem do you see? Give a simple 1-2 sentence description."
+                    }
+                ]
+            }
+        ]
+    )
+    return response.choices[0].message.content
+#waits for user to show screen, captures screen, sends the image for analysis
+def analyze_error():
+    image_data = wait_for_screen() 
+    return analyze_screen(image_data)
 #Describes the tool for the ai, saying "Here is a tool you can use"
 tools=[
     {
@@ -180,7 +244,7 @@ tools=[
         "type":"function",
         "function": {
             "name":"get_weather",
-            "description":"Gets current weather data in a specified city, including temperature and a description of conditions",
+            "description":"Gets current weather data in a specified city, including temperature and a description of conditions. This tool requires the user to specify the city they're in. If the user asks 'what's the weather like here?' Use their default location as the city. ",
             "parameters":{
                 "type":"object",
                 "properties":{
@@ -231,6 +295,17 @@ tools=[
                 "properties":{}
             }
         }
+    },
+    {
+        "type":"function",
+        "function": {
+            "name":"analyze_error",
+            "description":"Captures and analyzes a picture of the error message experienced by the user. This picture will be used to help with troubleshooting. ALWAYS use when the user describes an error message that is vague/ when they mention an error screen popping up. ",
+            "parameters":{
+                "type":"object",
+                "properties":{}
+            }
+        }
     }
     
 ]
@@ -238,6 +313,7 @@ active_client, model = get_client()
 messages=[{"role": "system", #tells the system its role
         "content": """You are a friendly home assistant named Jarvis who specializes in 
 tech support for older users with little technological experience.
+The default location of the user is Kingston, Jamaica.
 You have tools available to control Spotify, check weather, and get the time.
 IMPORTANT: When you need to use a tool, use it directly — never write out function calls as text.
 Always keep responses short and simple — 2 sentences maximum.
@@ -246,10 +322,13 @@ Good response example: 'Your printer may be out of paper. Try opening the paper 
 Bad response example: 'There are several potential causes for this issue. First, let's diagnose whether it's a connectivity problem, a driver issue, or a hardware malfunction...'"""
     }]
 
-listen_for_wake()
-speak("Yes?")
+
+
 while True:
     filename = os.path.dirname(__file__) +"/userspeech.wav"
+    listen_for_wake()
+    speak("Yes?")
+    
     # Step 1 — Record first, THEN transcribe
     print("Recording for 5 seconds... speak now")
     audio = sd.rec(int(5 * 16000), samplerate=16000, channels=1, dtype="int16")
@@ -265,12 +344,18 @@ while True:
         break
     #Adds the new message to chat history
     messages.append({"role":"user", "content":usertext})
-
-    response = active_client.chat.completions.create(
-        tools=tools, #Gives the ai the available tools 
-        tool_choice="auto",
-        messages=messages,   
-        model = model)
+    try:
+        response = active_client.chat.completions.create(
+            tools=tools,
+            tool_choice="auto",
+            messages=messages,
+            model=model
+        )
+    except Exception as e:
+        print(f"API error: {e}")
+        reply = "Sorry, I had trouble processing that. Could you try again?"
+        speak(reply)
+        continue
     #Did the ai want to call the tool?
     if response.choices[0].message.tool_calls:
         tool_call = response.choices[0].message.tool_calls[0]
@@ -291,6 +376,9 @@ while True:
             result = next_track()
         elif tool_call.function.name == "previous_track":
             result = previous_track()
+        elif tool_call.function.name == "analyze_error":
+            result = analyze_error()
+            print("Tool ran. Screen analyzed.")
         
 
         #add the message to the AIs memory 
@@ -303,8 +391,7 @@ while True:
 
         final = active_client.chat.completions.create(
             messages=messages,
-            model= model,
-            tool_choice="none"  # don't call tools again on the final response
+            model= model
         )
         reply = final.choices[0].message.content
     else:
