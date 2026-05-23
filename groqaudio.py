@@ -4,6 +4,7 @@ from scipy.io.wavfile import write
 from groq import Groq 
 from dotenv import load_dotenv
 from datetime import datetime
+from datetime import timedelta
 import requests
 import json
 import httpx
@@ -226,6 +227,44 @@ def analyze_screen(image_data):
 def analyze_error():
     image_data = wait_for_screen() 
     return analyze_screen(image_data)
+
+
+import threading
+
+def set_timer(time, label):
+    def timer_done():
+        data, samplerate = sf.read("alarm_sound.wav")
+        for i in range(2):
+            sd.play(data, samplerate)
+            sd.wait()
+        speak(f"Time's up! {label}")
+    
+    t = threading.Timer(time, timer_done)
+    t.start()
+    return f"{label} set for {time} seconds."
+active_timers = {}  # store timers by label
+
+def set_reminder(reminder, hours):
+    def reminder_done():
+        speak(f"Reminder: {reminder}")
+        active_timers.pop(reminder, None)
+    
+    seconds = hours * 3600
+    t = threading.Timer(seconds, reminder_done)
+    t.start()
+    active_timers[reminder] = t
+    return f"I'll remind you about '{reminder}' in {hours} hours."
+
+def cancel_reminder(reminder):
+    if reminder in active_timers:
+        active_timers[reminder].cancel()
+        active_timers.pop(reminder)
+        return f"Reminder cancelled."
+    return "No reminder found with that name."
+            
+
+
+
 #Describes the tool for the ai, saying "Here is a tool you can use"
 tools=[
     {
@@ -306,7 +345,69 @@ tools=[
                 "properties":{}
             }
         }
+    },
+    {
+        "type":"function",
+        "function": {
+            "name":"set_timer",
+            "description":"Accepts a time from the user, and plays an alarm sound when the time is reached.",
+            "parameters":{
+                "type":"object",
+                "properties":{
+                    "time":{
+                        "type":"integer",
+                        "description":"The time the user wishes the alarm to go off by.Duration in seconds. Convert from what the user says e.g. '2 minutes' = 120, '1 hour' = 3600."
+                    },
+                    "label": {
+                        "type":"string",
+                        "description":"The purpose of the alarm."
+                    }
+                    
+                },
+                "required":["time","label"] #tells the AI it Has to have this info
+            }
+        }
+    },
+    {
+        "type":"function",
+        "function": {
+            "name":"set_reminder",
+            "description":"The user gives something you should remind them about, as well as how often to remind them. This tool allows for the user to be constantly reminded about tasks.",
+            "parameters":{
+                "type":"object",
+                "properties":{
+                    "reminder":{
+                        "type":"string",
+                        "description":"The specific task the user wishes to be reminded about."
+                    },
+                    "hours": {
+                        "type":"integer",
+                        "description":"The amount of hours that must elapse before the user is reminded about their task again."
+                    }
+                    
+                },
+                "required":["reminder","hours"] #tells the AI it Has to have this info
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_reminder",
+            "description": "Cancels an active reminder the user no longer needs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reminder": {
+                        "type": "string",
+                        "description": "The reminder message to cancel."
+                    }
+                },
+                "required": ["reminder"]
+            }
+        }
     }
+
     
 ]
 active_client, model = get_client()
@@ -379,6 +480,17 @@ while True:
         elif tool_call.function.name == "analyze_error":
             result = analyze_error()
             print("Tool ran. Screen analyzed.")
+        elif tool_call.function.name == "set_timer":
+            args = json.loads(tool_call.function.arguments)
+            result = set_timer(args["time"],args["label"])
+        elif tool_call.function.name == "set_reminder":
+            args = json.loads(tool_call.function.arguments)
+            result = set_reminder(args["reminder"], args["hours"])
+        elif tool_call.function.name == "cancel_reminder":
+            args = json.loads(tool_call.function.arguments)
+            result = cancel_reminder(args["reminder"])
+
+        
         
 
         #add the message to the AIs memory 
