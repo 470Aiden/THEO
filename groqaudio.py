@@ -21,6 +21,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import cv2
 import base64
+from ddgs import DDGS
 
 
 
@@ -38,7 +39,10 @@ except:
     ONLINE = False
 
 wakeword_model=Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
+import time
 def listen_for_wake():
+    time.sleep(0.5)
+    wakeword_model.reset()
     pa = pyaudio.PyAudio()
     stream = pa.open(
         rate=16000,channels=1,
@@ -262,6 +266,21 @@ def cancel_reminder(reminder):
         return f"Reminder cancelled."
     return "No reminder found with that name."
             
+#Internet access
+def web_search(query):
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
+        if not results:
+            return "No results found."
+        summary = ""
+        for r in results:
+            summary += f"{r['title']}: {r['body']}\n\n"
+        return summary
+    except Exception as e:
+        print(f"Search error: {e}")
+        return "Couldn't search the web right now"
+
 
 
 
@@ -406,6 +425,23 @@ tools=[
                 "required": ["reminder"]
             }
         }
+    },
+     {
+        "type":"function",
+        "function": {
+            "name":"web_search",
+            "description":"This tool searches the internet based on information given by the user. ALWAYS use this tool when the user says 'Search for...' or asks about something you don't know about",
+            "parameters":{
+                "type":"object",
+                "properties":{
+                    "query":{
+                        "type":"string",
+                        "description":"WHat the user wants to search the internet for"
+                    }
+                },
+                "required":["query"] #tells the AI it Has to have this info
+            }
+        }
     }
 
     
@@ -423,93 +459,106 @@ Good response example: 'Your printer may be out of paper. Try opening the paper 
 Bad response example: 'There are several potential causes for this issue. First, let's diagnose whether it's a connectivity problem, a driver issue, or a hardware malfunction...'"""
     }]
 
-
+CONVERSATION_TIMEOUT = 15  # seconds before returning to wake word mode
 
 while True:
-    filename = os.path.dirname(__file__) +"/userspeech.wav"
+    filename = os.path.dirname(__file__) + "/userspeech.wav"
+    
+    # Wait for wake word
     listen_for_wake()
     speak("Yes?")
     
-    # Step 1 — Record first, THEN transcribe
-    print("Recording for 5 seconds... speak now")
-    audio = sd.rec(int(5 * 16000), samplerate=16000, channels=1, dtype="int16")
-    sd.wait()  # Waits until recording is fully done before moving on
-    write(filename, 16000, audio)
-    print("Done recording\n")
-    usertext = transcribe(filename)
-    print(f"You said: {usertext}")
-    if usertext.strip() in [".", ""]:  # silence
-        print("Nothing heard, listening again...\n")
-        continue
-    if "quit" in usertext.lower():  # exit
-        break
-    #Adds the new message to chat history
-    messages.append({"role":"user", "content":usertext})
-    try:
-        response = active_client.chat.completions.create(
-            tools=tools,
-            tool_choice="auto",
-            messages=messages,
-            model=model
-        )
-    except Exception as e:
-        print(f"API error: {e}")
-        reply = "Sorry, I had trouble processing that. Could you try again?"
+    # Keep conversation going until silence
+    while True:
+        print("Recording for 5 seconds... speak now")
+        audio = sd.rec(int(5 * 16000), samplerate=16000, channels=1, dtype="int16")
+        sd.wait()
+        write(filename, 16000, audio)
+        print("Done recording\n")
+        
+        usertext = transcribe(filename)
+        print(f"You said: {usertext}")
+        
+        if usertext.strip() in [".", ""]:
+            print("Nothing heard — returning to wake word mode\n")
+            speak("I'm still here if you need me.")
+            break  # exit inner loop, go back to wake word
+        
+        if "quit" in usertext.lower():
+            speak("Goodbye!")
+            exit()
+        
+        messages.append({"role": "user", "content": usertext})
+        
+        try:
+            response = active_client.chat.completions.create(
+                tools=tools,
+                tool_choice="auto",
+                messages=messages,
+                model=model
+            )
+        except Exception as e:
+            print(f"API error on first try: {e}, retrying...")
+            try:
+                response = active_client.chat.completions.create(
+                    tools=tools,
+                    tool_choice="auto",
+                    messages=messages,
+                    model=model
+                )
+            except Exception as e2:
+                print(f"API error on retry: {e2}")
+                reply = "Sorry, I had trouble processing that. Could you try again?"
+                speak(reply)
+                continue
+
+        if response.choices[0].message.tool_calls:
+            tool_call = response.choices[0].message.tool_calls[0]
+            if tool_call.function.name == "get_time":
+                result = get_time()
+            elif tool_call.function.name == "get_weather":
+                args = json.loads(tool_call.function.arguments)
+                result = get_weather(args["city"])
+            elif tool_call.function.name == "play_spotify":
+                args = json.loads(tool_call.function.arguments)
+                result = play_spotify(args["query"])
+            elif tool_call.function.name == "pause_spotify":
+                result = pause_spotify()
+            elif tool_call.function.name == "next_track":
+                result = next_track()
+            elif tool_call.function.name == "previous_track":
+                result = previous_track()
+            elif tool_call.function.name == "analyze_error":
+                result = analyze_error()
+            elif tool_call.function.name == "set_timer":
+                args = json.loads(tool_call.function.arguments)
+                result = set_timer(args["time"], args["label"])
+            elif tool_call.function.name == "set_reminder":
+                args = json.loads(tool_call.function.arguments)
+                result = set_reminder(args["reminder"], args["hours"])
+            elif tool_call.function.name == "cancel_reminder":
+                args = json.loads(tool_call.function.arguments)
+                result = cancel_reminder(args["reminder"])
+            elif tool_call.function.name == "web_search":
+                args = json.loads(tool_call.function.arguments)
+                result = web_search(args["query"])
+
+            messages.append(response.choices[0].message)
+            messages.append({
+                "role": "tool",
+                "content": result,
+                "tool_call_id": tool_call.id
+            })
+
+            final = active_client.chat.completions.create(
+                messages=messages,
+                model=model
+            )
+            reply = final.choices[0].message.content
+        else:
+            reply = response.choices[0].message.content
+
+        messages.append({"role": "assistant", "content": reply})
+        print(f"Jarvis: {reply}\n")
         speak(reply)
-        continue
-    #Did the ai want to call the tool?
-    if response.choices[0].message.tool_calls:
-        tool_call = response.choices[0].message.tool_calls[0]
-        #debug confirmation
-        if tool_call.function.name == "get_time":
-            result = get_time()
-            print(f"Tool ran: the time is, {result}")
-        elif tool_call.function.name == "get_weather":
-            args = json.loads(tool_call.function.arguments)
-            result = get_weather(args["city"])
-            print(f"Tool ran: Weather report is, {result}")
-        elif tool_call.function.name == "play_spotify":
-            args = json.loads(tool_call.function.arguments)
-            result = play_spotify(args["query"])
-        elif tool_call.function.name == "pause_spotify":
-            result = pause_spotify()
-        elif tool_call.function.name == "next_track":
-            result = next_track()
-        elif tool_call.function.name == "previous_track":
-            result = previous_track()
-        elif tool_call.function.name == "analyze_error":
-            result = analyze_error()
-            print("Tool ran. Screen analyzed.")
-        elif tool_call.function.name == "set_timer":
-            args = json.loads(tool_call.function.arguments)
-            result = set_timer(args["time"],args["label"])
-        elif tool_call.function.name == "set_reminder":
-            args = json.loads(tool_call.function.arguments)
-            result = set_reminder(args["reminder"], args["hours"])
-        elif tool_call.function.name == "cancel_reminder":
-            args = json.loads(tool_call.function.arguments)
-            result = cancel_reminder(args["reminder"])
-
-        
-        
-
-        #add the message to the AIs memory 
-        messages.append(response.choices[0].message)
-        messages.append({
-            "role":"tool",
-            "content":result,
-            "tool_call_id":tool_call.id    
-        })
-
-        final = active_client.chat.completions.create(
-            messages=messages,
-            model= model
-        )
-        reply = final.choices[0].message.content
-    else:
-        reply = response.choices[0].message.content
-    messages.append({"role":"assistant","content":reply})
-    print(f"Jarvis: {reply}\n")
-    speak(reply)
-
-
+        # Loop continues — user can keep talking without wake word
