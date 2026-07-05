@@ -2,15 +2,15 @@
 
 ## Overview
 
-Jarvis is an intelligent voice-controlled personal assistant designed specifically to help older adults with everyday technology challenges. The assistant combines speech recognition, natural language processing, computer vision, internet search, media control, and task management into a single easy-to-use system.
+Theo is an intelligent voice-controlled personal assistant designed specifically to help older adults with everyday technology challenges. The assistant combines speech recognition, natural language processing, computer vision, internet search, media control, and task management into a single easy-to-use system.
 
-Unlike traditional voice assistants, Jarvis focuses on providing simple, clear, and non-technical support for users who may have limited technological experience.
+Unlike traditional voice assistants, Theo  focuses on providing simple, clear, and non-technical support for users who may have limited technological experience.
 
 ## Features
 
 ### Wake Word Detection
 
-* Hands-free activation using the wake phrase **"Hey Jarvis"**
+* Hands-free activation using the wake phrase **"Hey Theo "**
 * Always listening in low-power mode
 * No need to press buttons or use a keyboard
 
@@ -28,7 +28,7 @@ Unlike traditional voice assistants, Jarvis focuses on providing simple, clear, 
 
 ### Online and Offline Operation
 
-Jarvis automatically detects internet availability and adapts its functionality:
+Theo  automatically detects internet availability and adapts its functionality:
 
 **Online Mode**
 
@@ -77,7 +77,7 @@ Control Spotify entirely through voice commands:
 
 A unique accessibility feature designed for non-technical users.
 
-Jarvis can:
+Theo  can:
 
 1. Detect when a user is experiencing a computer problem
 2. Ask them to hold the screen up to a camera
@@ -166,8 +166,8 @@ Jarvis can:
 ### Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/jarvis-assistant.git
-cd jarvis-assistant
+git clone https://github.com/yourusername/Theo -assistant.git
+cd Theo -assistant
 ```
 
 ### Install Dependencies
@@ -200,16 +200,16 @@ SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 
 ---
 
-## Running Jarvis
+## Running Theo 
 
 ```bash
 python main.py
 ```
 
-Jarvis will begin listening for the wake word:
+Theo  will begin listening for the wake word:
 
 ```text
-"Hey Jarvis"
+"Hey Theo "
 ```
 
 After activation, simply speak your request.
@@ -221,56 +221,56 @@ After activation, simply speak your request.
 ### General Questions
 
 ```text
-Hey Jarvis, what time is it?
+Hey Theo , what time is it?
 ```
 
 ```text
-Hey Jarvis, what's the weather in Kingston?
+Hey Theo , what's the weather in Kingston?
 ```
 
 ### Music Control
 
 ```text
-Hey Jarvis, play Shape of You by Ed Sheeran.
+Hey Theo , play Shape of You by Ed Sheeran.
 ```
 
 ```text
-Hey Jarvis, pause the music.
+Hey Theo , pause the music.
 ```
 
 ```text
-Hey Jarvis, skip this song.
+Hey Theo , skip this song.
 ```
 
 ### Timers
 
 ```text
-Hey Jarvis, set a timer for 10 minutes.
+Hey Theo , set a timer for 10 minutes.
 ```
 
 ### Reminders
 
 ```text
-Hey Jarvis, remind me to take my medication in 3 hours.
+Hey Theo , remind me to take my medication in 3 hours.
 ```
 
 ```text
-Hey Jarvis, cancel my medication reminder.
+Hey Theo , cancel my medication reminder.
 ```
 
 ### Web Search
 
 ```text
-Hey Jarvis, search for the latest news about Jamaica.
+Hey Theo , search for the latest news about Jamaica.
 ```
 
 ### Technical Support
 
 ```text
-Hey Jarvis, I'm getting an error on my computer.
+Hey Theo , I'm getting an error on my computer.
 ```
 
-Jarvis will request that the user show the screen to the camera and then provide a simplified explanation of the problem.
+Theo  will request that the user show the screen to the camera and then provide a simplified explanation of the problem.
 
 
 
@@ -278,7 +278,7 @@ Jarvis will request that the user show the screen to the camera and then provide
 
 Project Goal
 
-The primary goal of Jarvis is to make technology more accessible to elderly users by providing a voice-first interface that reduces reliance on keyboards, touchscreens, and technical knowledge. By combining AI-powered assistance with simple communication, Jarvis helps bridge the gap between modern technology and users who may find it difficult to navigate.
+The primary goal of Theo  is to make technology more accessible to elderly users by providing a voice-first interface that reduces reliance on keyboards, touchscreens, and technical knowledge. By combining AI-powered assistance with simple communication, Theo  helps bridge the gap between modern technology and users who may find it difficult to navigate.
 
 
 
