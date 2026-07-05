@@ -1,4 +1,4 @@
-# Jarvis - AI Voice Assistant for Elderly Tech Support
+# THEO - AI Voice Assistant for Elderly Tech Support (Technical Help, Explanations, and Optimization)
 
 ## Overview
 
