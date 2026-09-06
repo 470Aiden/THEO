@@ -1,7 +1,7 @@
 import os
 import sounddevice as sd
 from scipy.io.wavfile import write
-from groq import Groq 
+from groq import Groq
 from dotenv import load_dotenv
 from datetime import datetime
 from datetime import timedelta
@@ -25,12 +25,13 @@ from ddgs import DDGS
 
 
 
-load_dotenv("key.env")#uses python-dotenv library to read the .env file for the api key
+load_dotenv("homeassistant/key.env")#uses python-dotenv library to read the .env file for the api key
+
 api_key = os.environ.get("GROQ_API_KEY")  #assigns the api key to a variable
 client = Groq(api_key=api_key)
 el_client = ElevenLabs(api_key=os.environ.get("ELEVEN_LABS_KEY"))
 
-kokoro = Kokoro("kokoro-v1.0.int8.onnx", "voices-v1.0.bin") #sets up kokoro 
+kokoro = Kokoro("kokoro-v1.1-zh.onnx", "voices-v1.0.bin") #sets up kokoro 
 #tries accessing the groq api link. Will not work without internet access.
 try:
     httpx.get("https://api.groq.com", timeout=2)
@@ -38,7 +39,7 @@ try:
 except:
     ONLINE = False
 
-wakeword_model=Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
+wakeword_model=Model(wakeword_models=["hey_theo.onnx"], inference_framework="onnx")
 import time
 def listen_for_wake():
     time.sleep(0.5)
@@ -53,9 +54,9 @@ def listen_for_wake():
     while True:
         audio_chunk = np.frombuffer(stream.read(1280), dtype=np.int16)
         prediction = wakeword_model.predict(audio_chunk)
-        if prediction["hey_jarvis"] > 0.5:
+        if prediction["hey_theo"] > 0.5:
             stream.stop_stream()
-            stream.close()
+            stream.close()  
             pa.terminate()
             return    # Wake word heard, exit and start recording
 
@@ -100,7 +101,7 @@ def speak(reply):
 #Checks internet access to determine whether to use cloud groq model or local ollama model.
 def get_client():
     if ONLINE == True:
-        return client, "llama-3.3-70b-versatile"
+        return client, "openai/gpt-oss-120b"
     else:
         print("Offline - Using Ollama")
         local_client = OpenAI(
@@ -135,18 +136,32 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
     redirect_uri="http://127.0.0.1:8000/callback",
     scope="user-modify-playback-state user-read-playback-state user-read-recently-played"
 ))
+def get_playback_device():
+    """Find a device we can actually play on. Returns a device id, or None."""
+    devices = sp.devices().get("devices", [])
+    usable = [d for d in devices if not d.get("is_restricted")]
+    if not usable:
+        return None
+    for d in usable:
+        if d.get("is_active"):
+            return d["id"]
+    return usable[0]["id"]      # nothing active — take the first one and wake it
 def play_spotify(query):
     try:
-        results = sp.search(q=query, type="track",limit=1)
-        track_uri= results["tracks"]["items"][0]["uri"]
-        sp.start_playback(uris=[track_uri])
-        track_name= results["tracks"]["items"][0]["name"]
-        artist = results["tracks"]["items"][0]["artists"][0]["name"]
-        return f"Playing {track_name} by {artist}"
+        device_id = get_playback_device()
+        if device_id is None:
+            return "I can't find Spotify running on anything right now. Open it on your phone or computer, then ask me again."
+
+        results = sp.search(q=query, type="track", limit=1)
+        if not results["tracks"]["items"]:
+            return f"I couldn't find a song called {query}."
+
+        track = results["tracks"]["items"][0]
+        sp.start_playback(device_id=device_id, uris=[track["uri"]])
+        return f"Playing {track['name']} by {track['artists'][0]['name']}"
     except Exception as e:
         print(f"Spotify error is {e}")
-        return "Couldn't play that. Ensure spotify is open on your device."
-
+        return "Couldn't play that. Ensure Spotify is open on your device."
 def pause_spotify():
     try:
         playback= sp.current_playback()
@@ -207,7 +222,7 @@ def wait_for_screen():
 
 def analyze_screen(image_data):
     response = client.chat.completions.create(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        model="qwen/qwen3.6-27b",
         messages=[
             {
                 "role": "user",
@@ -430,7 +445,7 @@ tools=[
         "type":"function",
         "function": {
             "name":"web_search",
-            "description":"This tool searches the internet based on information given by the user. ALWAYS use this tool when the user says 'Search for...' or asks about something you don't know about",
+            "description":"This tool searches the internet based on information given by the user. ALWAYS use this tool when the user says 'Search for...' or asks about something you don't know about. Also use this if, say, the user asks for your thoughts on a person.",
             "parameters":{
                 "type":"object",
                 "properties":{
@@ -448,12 +463,13 @@ tools=[
 ]
 active_client, model = get_client()
 messages=[{"role": "system", #tells the system its role
-        "content": """You are a friendly home assistant named Jarvis who specializes in 
+        "content": """You are a friendly home assistant named THEO, short for Technical Help, Explanations and Optimization, who specializes in 
 tech support for older users with little technological experience.
 The default location of the user is Kingston, Jamaica.
 You have tools available to control Spotify, check weather, and get the time.
 IMPORTANT: When you need to use a tool, use it directly — never write out function calls as text.
 Always keep responses short and simple — 2 sentences maximum.
+Your creator is Aiden Bramwell, an 18 year old student at Campion College who is also an aspiring electrical engineer. If a user asks about him, tell them this.
 Avoid technical jargon. If giving instructions, use one step at a time.
 Good response example: 'Your printer may be out of paper. Try opening the paper tray and refilling it.'
 Bad response example: 'There are several potential causes for this issue. First, let's diagnose whether it's a connectivity problem, a driver issue, or a hardware malfunction...'"""
@@ -490,27 +506,24 @@ while True:
         
         messages.append({"role": "user", "content": usertext})
         
-        try:
-            response = active_client.chat.completions.create(
-                tools=tools,
-                tool_choice="auto",
-                messages=messages,
-                model=model
-            )
-        except Exception as e:
-            print(f"API error on first try: {e}, retrying...")
+        response = None
+        for temp in (1.0, 0.6, 0.2):
             try:
                 response = active_client.chat.completions.create(
                     tools=tools,
                     tool_choice="auto",
                     messages=messages,
-                    model=model
+                    model=model,
+                    temperature=temp
                 )
-            except Exception as e2:
-                print(f"API error on retry: {e2}")
-                reply = "Sorry, I had trouble processing that. Could you try again?"
-                speak(reply)
-                continue
+                break
+            except Exception as e:
+                print(f"Tool call failed at temperature {temp}: {e}")
+
+        if response is None:
+            messages.pop()
+            speak("Sorry, I had trouble with that one. Could you say it again?")
+            continue
 
         if response.choices[0].message.tool_calls:
             tool_call = response.choices[0].message.tool_calls[0]
@@ -558,7 +571,12 @@ while True:
         else:
             reply = response.choices[0].message.content
 
+        if reply and "<function" in reply:
+            print("Model wrote a tool call as text instead of calling it — discarding.")
+            messages.pop()
+            speak("Sorry, I couldn't do that one. Could you ask me again?")
+            continue
         messages.append({"role": "assistant", "content": reply})
-        print(f"Jarvis: {reply}\n")
+        print(f"THEO: {reply}\n")
         speak(reply)
         # Loop continues — user can keep talking without wake word

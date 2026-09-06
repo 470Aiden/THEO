@@ -14,6 +14,8 @@ Unlike traditional voice assistants, Theo  focuses on providing simple, clear, a
 * Always listening in low-power mode
 * No need to press buttons or use a keyboard
 
+* For training your own custom wakeword models, I recommend using the free colab notebook by the creator: https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb#scrollTo=qgaKWIY6WlJ1
+
 ### Speech Recognition
 
 * Online transcription using Groq's Whisper Large V3 Turbo model
