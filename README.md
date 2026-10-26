@@ -2,23 +2,25 @@
 
 ## Overview
 
-Theo is an intelligent voice-controlled personal assistant designed specifically to help older adults with everyday technology challenges. The assistant combines speech recognition, natural language processing, computer vision, internet search, media control, and task management into a single easy-to-use system.
+THEO is an intelligent voice-controlled personal assistant designed specifically to help older adults with everyday technology challenges. The assistant combines speech recognition, natural language processing, computer vision, internet search, media control, and task management into a single easy-to-use system.
 
-Unlike traditional voice assistants, Theo  focuses on providing simple, clear, and non-technical support for users who may have limited technological experience.
+Unlike traditional voice assistants, THEO  focuses on providing simple, clear, and non-technical support for users who may have limited technological experience.
+
+## Project Goal
+
+The primary goal of THEO  is to make technology more accessible to elderly users by providing a voice-first interface that reduces reliance on keyboards, touchscreens, and technical knowledge. By combining AI-powered assistance with simple communication, THEO  helps bridge the gap between modern technology and users who may find it difficult to navigate.
 
 ## Features
 
 ### Wake Word Detection
 
-* Hands-free activation using the wake phrase **"Hey Theo "**
-* Always listening in low-power mode
-* No need to press buttons or use a keyboard
-
-* For training your own custom wakeword models, I recommend using the free colab notebook by the creator: https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb#scrollTo=qgaKWIY6WlJ1
+* Hands-free activation using the wake phrase **"Hey THEO"**
+* Talk button that makes THEO start listening automatically.
+* For training your own custom wakeword models, I recommend using the free colab notebook by the creator of openwakeword: https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb#scrollTo=qgaKWIY6WlJ1
 
 ### Speech Recognition
 
-* Online transcription using Groq's Whisper Large V3 Turbo model
+* Online transcription using Groq's openai/gpt-oss-120b model
 * Automatic offline fallback using Faster-Whisper
 * Seamless transition between online and offline modes
 
@@ -30,7 +32,7 @@ Unlike traditional voice assistants, Theo  focuses on providing simple, clear, a
 
 ### Online and Offline Operation
 
-Theo  automatically detects internet availability and adapts its functionality:
+THEO  automatically detects internet availability and adapts its functionality:
 
 **Online Mode**
 
@@ -46,6 +48,8 @@ Theo  automatically detects internet availability and adapts its functionality:
 * Ollama local language model
 * Faster-Whisper transcription
 * Kokoro speech synthesis
+* Basic reminders, timers
+* Basic help/advice, reliant on the local model
 
 ### ☁️ Weather Information
 
@@ -62,32 +66,33 @@ Control Spotify entirely through voice commands:
 * Skip tracks
 * Return to previous tracks
 
-### ⏰ Timers and Reminders
+### Timers and Reminders
 
 * Create countdown timers
 * Set recurring reminders
 * Cancel existing reminders
 * Audio notifications when reminders expire
 
-### 🔍 Internet Search
+### Internet Search
 
 * Voice-powered web searching
+* Results fetched through the DuckDuckGo API
 * Retrieves and summarizes search results
 * Provides quick answers to user questions
 
-### 🖥️ Computer Error Analysis
+### Computer Error Analysis
 
 A unique accessibility feature designed for non-technical users.
 
-Theo  can:
+THEO  can:
 
-1. Detect when a user is experiencing a computer problem
+1. Understand when the user wants to show their error
 2. Ask them to hold the screen up to a camera
 3. Capture an image automatically
 4. Analyze the error using a multimodal AI model
 5. Explain the issue in simple language
 
-### 👴 Elderly-Friendly Design
+### Elderly-Friendly Design
 
 * Short responses (maximum two sentences)
 * Simple instructions
@@ -136,8 +141,8 @@ Theo  can:
 * OpenWakeWord
 * ElevenLabs
 * Kokoro ONNX
-* SoundDevice
-* PyAudio
+* SoundDevice (python library)
+* PyAudio (python library)
 
 ### Computer Vision
 
@@ -168,8 +173,8 @@ Theo  can:
 ### Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/Theo -assistant.git
-cd Theo -assistant
+git clone https://github.com/yourusername/THEO -assistant.git
+cd THEO -assistant
 ```
 
 ### Install Dependencies
@@ -202,16 +207,16 @@ SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 
 ---
 
-## Running Theo 
+## Running THEO 
 
 ```bash
 python main.py
 ```
 
-Theo  will begin listening for the wake word:
+THEO  will begin listening for the wake word:
 
 ```text
-"Hey Theo "
+"Hey THEO "
 ```
 
 After activation, simply speak your request.
@@ -223,64 +228,60 @@ After activation, simply speak your request.
 ### General Questions
 
 ```text
-Hey Theo , what time is it?
+Hey THEO , what time is it?
 ```
 
 ```text
-Hey Theo , what's the weather in Kingston?
+Hey THEO , what's the weather in Kingston?
 ```
 
 ### Music Control
 
 ```text
-Hey Theo , play Shape of You by Ed Sheeran.
+Hey THEO , play Shape of You by Ed Sheeran.
 ```
 
 ```text
-Hey Theo , pause the music.
+Hey THEO , pause the music.
 ```
 
 ```text
-Hey Theo , skip this song.
+Hey THEO , skip this song.
 ```
 
 ### Timers
 
 ```text
-Hey Theo , set a timer for 10 minutes.
+Hey THEO , set a timer for 10 minutes.
 ```
 
 ### Reminders
 
 ```text
-Hey Theo , remind me to take my medication in 3 hours.
+Hey THEO , remind me to take my medication in 3 hours.
 ```
 
 ```text
-Hey Theo , cancel my medication reminder.
+Hey THEO , cancel my medication reminder.
 ```
 
 ### Web Search
 
 ```text
-Hey Theo , search for the latest news about Jamaica.
+Hey THEO , search for the latest news about Jamaica.
 ```
 
 ### Technical Support
 
 ```text
-Hey Theo , I'm getting an error on my computer.
+Hey THEO , I'm getting an error on my computer.
 ```
 
-Theo  will request that the user show the screen to the camera and then provide a simplified explanation of the problem.
+THEO  will request that the user show the screen to the camera and then provide a simplified explanation of the problem.
 
 
 
 
-
-Project Goal
-
-The primary goal of Theo  is to make technology more accessible to elderly users by providing a voice-first interface that reduces reliance on keyboards, touchscreens, and technical knowledge. By combining AI-powered assistance with simple communication, Theo  helps bridge the gap between modern technology and users who may find it difficult to navigate.
 
 
 
